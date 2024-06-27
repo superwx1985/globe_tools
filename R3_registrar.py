@@ -2,6 +2,8 @@ import requests
 import tkinter as tk
 import logging
 import io
+import threading
+import uuid
 from logger_config import get_logger, TextHandler
 from datetime import datetime
 from tkinter import ttk
@@ -13,8 +15,43 @@ def make_file_object(file_content):
     return {'file': ('example.txt', file_like_object, 'text/plain')}
 
 
-def raise_connection_error(rep):
-    raise ConnectionError(f"request url: {rep.request.url}, status code: {rep.status_code}, message: {rep.text}")
+def raise_connection_error(response):
+    raise ConnectionError(f"Connection error, please check the response of Request ID: {response._id}")
+
+
+def print_request_info(prepared_request, logger):
+    msg = f"""
+====================
+Request ID: {prepared_request._id}
+Request URL: {prepared_request.url}
+Request Method: {prepared_request.method}
+Request Headers: {prepared_request.headers}
+Request Body: {prepared_request.body}
+===================="""
+    logger.info(msg)
+
+
+def print_response_info(response, logger):
+    msg = f"""
+====================
+Request ID: {response._id}
+Response Code: {response.status_code}
+Response Message: {response.text}
+===================="""
+    logger.info(msg)
+
+
+def _request(method, url, headers=None, files=None, data=None, params=None, auth=None, cookies=None, hooks=None, json=None, logger=get_logger(__name__)):
+    session = requests.Session()
+    _id = str(uuid.uuid4())
+    req = requests.Request(method, url, headers, files, data, params, auth, cookies, hooks, json)
+    prepared_request = session.prepare_request(req)
+    prepared_request._id = _id
+    print_request_info(prepared_request, logger)
+    rep = session.send(prepared_request)
+    rep._id = _id
+    print_response_info(rep, logger)
+    return rep
 
 
 def register(env, row, sn, mcu1, mcu2, logger=get_logger()):
@@ -44,17 +81,16 @@ def register(env, row, sn, mcu1, mcu2, logger=get_logger()):
         password = envs[env]["password"]
         region_iso3 = envs[env]["regionIso3"]
         _type = envs[env]["type"]
+        device_api = ""
+        app_api = ""
+        guc_api = ""
 
         get_region_body = {
             "merchantId": "100000000000000000",
             "type": _type,
             "regionIso3": region_iso3
         }
-        get_region_rep = requests.post(f"{centralized_endpoint_api}/world/country/getRegion", json=get_region_body)
-
-        device_api = ""
-        app_api = ""
-        guc_api = ""
+        get_region_rep = _request("POST", f"{centralized_endpoint_api}/world/country/getRegion", json=get_region_body, logger=logger)
         if get_region_rep.status_code == 200:
             urls = get_region_rep.json()["info"]["apiUrl"]
             device_api = urls["app"]
@@ -65,23 +101,16 @@ def register(env, row, sn, mcu1, mcu2, logger=get_logger()):
 
         get_token_payload = f"grant_type=password&client_id={client_id}&client_secret={client_secret}&username={username}&password={password}"
         access_token = ""
-        get_token_rep = requests.post(f"{guc_api}/connect/token",
-                                      headers={"Content-Type": "application/x-www-form-urlencoded"},
-                                      data=get_token_payload)
+        get_token_rep = _request("POST", f"{guc_api}/connect/token", headers={"Content-Type": "application/x-www-form-urlencoded"}, data=get_token_payload, logger=logger)
         if get_token_rep.status_code == 200:
             _ = get_token_rep.json()
             access_token = f"{_["token_type"]} {_["access_token"]}"
         else:
-            raise_connection_error(get_region_rep)
+            raise_connection_error(get_token_rep)
 
         formatted_time = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-
-        register_r3_app_board_rep = requests.post(f"{app_api}/v3/service/common/RLM3/device/1",
-                                                  headers={"Access-Token": access_token},
-                                                  files=make_file_object(
-                                                      f"{row};000042;{formatted_time};{sn};{mcu1};{mcu2};221;1;0;040085400;05;"))
+        register_r3_app_board_rep = _request("POST", f"{app_api}/v3/service/common/RLM3/device/1", headers={"Access-Token": access_token}, files=make_file_object(f"{row};000042;{formatted_time};{sn};{mcu1};{mcu2};221;1;0;040085400;05;"), logger=logger)
         if register_r3_app_board_rep.status_code == 400:
-            logger.debug(register_r3_app_board_rep.text)
             _ = register_r3_app_board_rep.json()
             if row in _["data"]["success"]:
                 logger.info(f"{row} r3_app_board successfully registered")
@@ -90,19 +119,16 @@ def register(env, row, sn, mcu1, mcu2, logger=get_logger()):
         else:
             raise_connection_error(register_r3_app_board_rep)
 
-        register_r3_info_rep = requests.post(f"{app_api}/v3/service/common/RLM3/device/2",
-                                             headers={"Access-Token": access_token},
-                                             files=make_file_object(
-                                                 f"{row};000028;{formatted_time};{sn};1109-030-B-10A:010;1109-030-B-10B:3;1109-030-B-10C:01;1109-030-B-10D:000000000;1109-030-B-10E:00;1109-030-B-10F:0000000000;1109-030-B-20A:040077800;1109-030-B-20B:06;1109-030-B-20C:235040013;1109-030-B-20D:1703887890;1109-030-B-25A:040085400;1109-030-B-25B:05;1109-030-B-25C:1704192278;1109-030-B-30:000000000021;1109-030-B-40:001693398400;1109-030-B-45:001703254987;1109-030-B-50A:000000000000000;1109-030-B-50B:00000000000000000000;1109-030-B-50C:000000000000000000000000000000;1109-030-B-60A:000000000;1109-030-B-60B:00;1109-030-B-60C:0000000000;1109-030-B-60D:00000000;1109-030-B-60E:000000000;1109-030-B-60F:000;1109-030-B-60G:0;1109-030-B-60H:00;1109-030-B-60I:000;1109-030-B-60J:0;1109-030-B-60K:00;1109-030-B-60L:000000000;1109-030-B-60M:00;1109-030-B-60N:0;1109-030-B-70:0000;"))
+        register_r3_info_rep = _request("POST", f"{app_api}/v3/service/common/RLM3/device/2", headers={"Access-Token": access_token}, files=make_file_object(f"{row};000028;{formatted_time};{sn};1109-030-B-10A:010;1109-030-B-10B:3;1109-030-B-10C:01;1109-030-B-10D:000000000;1109-030-B-10E:00;1109-030-B-10F:0000000000;1109-030-B-20A:040077800;1109-030-B-20B:06;1109-030-B-20C:235040013;1109-030-B-20D:1703887890;1109-030-B-25A:040085400;1109-030-B-25B:05;1109-030-B-25C:1704192278;1109-030-B-30:000000000021;1109-030-B-40:001693398400;1109-030-B-45:001703254987;1109-030-B-50A:000000000000000;1109-030-B-50B:00000000000000000000;1109-030-B-50C:000000000000000000000000000000;1109-030-B-60A:000000000;1109-030-B-60B:00;1109-030-B-60C:0000000000;1109-030-B-60D:00000000;1109-030-B-60E:000000000;1109-030-B-60F:000;1109-030-B-60G:0;1109-030-B-60H:00;1109-030-B-60I:000;1109-030-B-60J:0;1109-030-B-60K:00;1109-030-B-60L:000000000;1109-030-B-60M:00;1109-030-B-60N:0;1109-030-B-70:0000;"), logger=logger)
+
         if register_r3_info_rep.status_code == 400:
-            logger.debug(register_r3_info_rep.text)
             _ = register_r3_info_rep.json()
             if row in _["data"]["success"]:
                 logger.info(f"{row} r3_info successfully registered")
             else:
                 logger.error("r3_info register failed, please check your data")
         else:
-            logger.error(f"Server error: {register_r3_info_rep.status_code}")
+            raise_connection_error(register_r3_info_rep)
 
     except Exception as e:
         logger.error(e)
@@ -116,6 +142,27 @@ class MyApp(tk.Tk):
         self.xlink_vehicle = None
         self.logger = get_logger()
         self.logger.setLevel(logging.DEBUG)
+        self.tasks = list()
+
+        def async_call(func, *args, **kwargs):
+            self.register_button.config(text="Running", state=tk.DISABLED)
+            t = threading.Thread(target=func, args=args, kwargs=kwargs)
+            self.tasks.append(t)
+            t.daemon = True
+            t.start()
+
+        def check_register_status():
+            i = 0
+            while i < len(self.tasks):
+                if not self.tasks[i].is_alive():
+                    self.tasks.pop(i)
+                    self.register_button.config(text="Register", state=tk.NORMAL)
+                i += 1
+
+        def loop_update():
+            check_register_status()
+            # 1 秒后再次调用自己
+            self.after(1000, loop_update)
 
         # 创建主窗口
         self.title("R3 Registrar")
@@ -180,7 +227,7 @@ class MyApp(tk.Tk):
             self.logger.info(f"{env=} {row=} {sn=} {mcu1=} {mcu2=}")
             register(env, row, sn, mcu1, mcu2, self.logger)
 
-        self.register_button = tk.Button(left_frame, text="Register", fg="green", width=10, command=click_register)
+        self.register_button = tk.Button(left_frame, text="Register", fg="green", width=10, command=lambda: async_call(click_register))
         self.register_button.grid(row=i, column=1, padx=2, sticky='w')
 
         # 创建一个 ScrolledText 小部件用于显示日志
@@ -206,7 +253,7 @@ class MyApp(tk.Tk):
 
         # 获取根日志记录器并添加处理器
         logger = get_logger()
-        logger.setLevel(logging.DEBUG)
+        logger.setLevel(logging.INFO)
         logger.addHandler(self.log_handler)
 
         def clear():
@@ -217,6 +264,8 @@ class MyApp(tk.Tk):
         clean_log_button = tk.Button(right_frame, text="Clear Log", command=clear, width=10)
         clean_log_button.grid(row=i, column=0, padx=2, pady=2)
         i += 1
+
+        loop_update()
 
 
 if __name__ == "__main__":
