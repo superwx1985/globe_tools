@@ -12,7 +12,7 @@ def get_logger(logger_name=__name__):
         logger.setLevel(logging.DEBUG)
 
         # 创建控制台处理器
-        console_handler = logging.StreamHandler()
+        console_handler = ColorHandler()
         console_handler.setLevel(logging.DEBUG)
 
         # 创建日志格式器
@@ -38,3 +38,26 @@ class TextHandler(logging.Handler):
         self.widget.insert(tk.END, msg + '\n')
         self.widget.configure(state='disabled')
         self.widget.yview(tk.END)
+
+
+class ColorHandler(logging.StreamHandler):
+    # https://en.wikipedia.org/wiki/ANSI_escape_code#Colors
+    GRAY8 = "38;5;8"
+    GRAY7 = "38;5;7"
+    ORANGE = "33"
+    RED = "31"
+    WHITE = "0"
+
+    def emit(self, record):
+        # Don't use white for any logging, to help distinguish from user print statements
+        level_color_map = {
+            logging.DEBUG: self.GRAY8,
+            logging.INFO: self.GRAY7,
+            logging.WARNING: self.ORANGE,
+            logging.ERROR: self.RED,
+        }
+
+        csi = f"{chr(27)}["  # control sequence introducer
+        color = level_color_map.get(record.levelno, self.WHITE)
+        msg = self.format(record)
+        print(f"{csi}{color}m{msg}{csi}m")
