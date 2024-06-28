@@ -1,3 +1,5 @@
+from wsgiref import headers
+
 import requests
 import tkinter as tk
 import logging
@@ -31,17 +33,20 @@ Request Body: {prepared_request.body}
     logger.info(msg)
 
 
-def print_response_info(response, logger):
+def print_response_info(response, logger, highlight_error=False):
     msg = f"""
 ====================
 Request ID: {response._id}
 Response Code: {response.status_code}
 Response Message: {response.text}
 ===================="""
-    logger.info(msg)
+    if highlight_error and response.status_code >= 400:
+        logger.error(msg)
+    else:
+        logger.info(msg)
 
 
-def _request(method, url, headers=None, files=None, data=None, params=None, auth=None, cookies=None, hooks=None, json=None, logger=get_logger(__name__)):
+def request(method, url, headers=None, files=None, data=None, params=None, auth=None, cookies=None, hooks=None, json=None, logger=get_logger(), highlight_error=False):
     session = requests.Session()
     _id = str(uuid.uuid4())
     req = requests.Request(method, url, headers, files, data, params, auth, cookies, hooks, json)
@@ -50,7 +55,7 @@ def _request(method, url, headers=None, files=None, data=None, params=None, auth
     print_request_info(prepared_request, logger)
     rep = session.send(prepared_request)
     rep._id = _id
-    print_response_info(rep, logger)
+    print_response_info(rep, logger, highlight_error)
     return rep
 
 
@@ -90,7 +95,7 @@ def register(env, row, sn, mcu1, mcu2, logger=get_logger()):
             "type": _type,
             "regionIso3": region_iso3
         }
-        get_region_rep = _request("POST", f"{centralized_endpoint_api}/world/country/getRegion", json=get_region_body, logger=logger)
+        get_region_rep = request("POST", f"{centralized_endpoint_api}/world/country/getRegion", json=get_region_body, logger=logger, highlight_error=True)
         if get_region_rep.status_code == 200:
             urls = get_region_rep.json()["info"]["apiUrl"]
             device_api = urls["app"]
@@ -101,7 +106,7 @@ def register(env, row, sn, mcu1, mcu2, logger=get_logger()):
 
         get_token_payload = f"grant_type=password&client_id={client_id}&client_secret={client_secret}&username={username}&password={password}"
         access_token = ""
-        get_token_rep = _request("POST", f"{guc_api}/connect/token", headers={"Content-Type": "application/x-www-form-urlencoded"}, data=get_token_payload, logger=logger)
+        get_token_rep = request("POST", f"{guc_api}/connect/token", headers={"Content-Type": "application/x-www-form-urlencoded"}, data=get_token_payload, logger=logger, highlight_error=True)
         if get_token_rep.status_code == 200:
             _ = get_token_rep.json()
             access_token = f"{_["token_type"]} {_["access_token"]}"
@@ -110,7 +115,7 @@ def register(env, row, sn, mcu1, mcu2, logger=get_logger()):
 
         formatted_time = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
         register_r3_app_board_payload = f"{row};000042;{formatted_time};{sn};{mcu1};{mcu2};221;1;0;040085400;05;"
-        register_r3_app_board_rep = _request("POST", f"{app_api}/v3/service/common/RLM3/device/1", params={"fileName": "1.scv"}, headers={"Access-Token": access_token}, data=register_r3_app_board_payload, logger=logger)
+        register_r3_app_board_rep = request("POST", f"{app_api}/v3/service/common/RLM3/device/1", params={"fileName": "1.scv"}, headers={"Access-Token": access_token}, data=register_r3_app_board_payload, logger=logger, highlight_error=True)
         _ = register_r3_app_board_rep.json()
         if register_r3_app_board_rep.status_code == 200 and row in _["data"]["success"]:
             logger.info(f"{row} r3_app_board successfully registered")
@@ -118,7 +123,7 @@ def register(env, row, sn, mcu1, mcu2, logger=get_logger()):
             logger.error(f"r3_app_board register failed: {_["message"]}")
 
         register_r3_info_payload = f"{row};000028;{formatted_time};{sn};1109-030-B-10A:010;1109-030-B-10B:3;1109-030-B-10C:01;1109-030-B-10D:000000000;1109-030-B-10E:00;1109-030-B-10F:0000000000;1109-030-B-20A:040077800;1109-030-B-20B:06;1109-030-B-20C:235040013;1109-030-B-20D:1703887890;1109-030-B-25A:040085400;1109-030-B-25B:05;1109-030-B-25C:1704192278;1109-030-B-30:000000000021;1109-030-B-40:001693398400;1109-030-B-45:001703254987;1109-030-B-50A:000000000000000;1109-030-B-50B:00000000000000000000;1109-030-B-50C:000000000000000000000000000000;1109-030-B-60A:000000000;1109-030-B-60B:00;1109-030-B-60C:0000000000;1109-030-B-60D:00000000;1109-030-B-60E:000000000;1109-030-B-60F:000;1109-030-B-60G:0;1109-030-B-60H:00;1109-030-B-60I:000;1109-030-B-60J:0;1109-030-B-60K:00;1109-030-B-60L:000000000;1109-030-B-60M:00;1109-030-B-60N:0;1109-030-B-70:0000;"
-        register_r3_info_rep = _request("POST", f"{app_api}/v3/service/common/RLM3/device/2", params={"fileName": "2.scv"}, headers={"Access-Token": access_token}, data=register_r3_info_payload, logger=logger)
+        register_r3_info_rep = request("POST", f"{app_api}/v3/service/common/RLM3/device/2", params={"fileName": "2.scv"}, headers={"Access-Token": access_token}, data=register_r3_info_payload, logger=logger, highlight_error=True)
         _ = register_r3_info_rep.json()
         if register_r3_info_rep.status_code == 200 and row in _["data"]["success"]:
             logger.info(f"{row} r3_info successfully registered")
