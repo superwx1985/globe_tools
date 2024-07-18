@@ -39,6 +39,7 @@ def print_response_info(response, logger, highlight_error=False):
 Request ID: {response._id}
 Response Code: {response.status_code}
 Response Message: {response.text}
+Response Elapsed: {response.elapsed}
 ===================="""
     if highlight_error and response.status_code >= 400:
         logger.error(msg)
@@ -59,7 +60,7 @@ def request(method, url, headers=None, files=None, data=None, params=None, auth=
     return rep
 
 
-def register(env, row, sn, mcu1, mcu2, logger=get_logger()):
+def register(env, device_type, row, sn, mcu1, mcu2, logger=get_logger()):
     try:
         envs = {"DEV": {"centralized_endpoint_api": "https://center-api.globe-groups.com/globe",
                         "client_id": "SendService",
@@ -114,21 +115,33 @@ def register(env, row, sn, mcu1, mcu2, logger=get_logger()):
             raise_connection_error(get_token_rep)
 
         formatted_time = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-        register_r3_app_board_payload = f"{row};000042;{formatted_time};{sn};{mcu1};{mcu2};221;1;0;040085400;05;"
-        register_r3_app_board_rep = request("POST", f"{app_api}/v3/service/common/RLM3/device/1", params={"fileName": "1.scv"}, headers={"Access-Token": access_token}, data=register_r3_app_board_payload, logger=logger, highlight_error=True)
-        _ = register_r3_app_board_rep.json()
-        if register_r3_app_board_rep.status_code == 200 and row in _["data"]["success"]:
-            logger.info(f"{row} r3_app_board successfully registered")
+        if device_type == "Mower":
+            register_mower_app_board_payload = f"{row};000042;{formatted_time};{sn};{mcu1};{mcu2};221;1;0;040085400;05;"
+            register_mower_app_board_rep = request("POST", f"{app_api}/v3/service/common/RLM3/device/1", params={"fileName": "1.csv"}, headers={"Access-Token": access_token}, data=register_mower_app_board_payload, logger=logger, highlight_error=True)
+            _ = register_mower_app_board_rep.json()
+            if register_mower_app_board_rep.status_code == 200 and row in _["data"]["success"]:
+                logger.info(f"{row} mower_app_board register successfully")
+            else:
+                logger.error(f"mower_app_board register failed: {_["message"]}")
+    
+            register_mower_info_payload = f"{row};000028;{formatted_time};{sn};1109-030-B-10A:010;1109-030-B-10B:3;1109-030-B-10C:01;1109-030-B-10D:000000000;1109-030-B-10E:00;1109-030-B-10F:0000000000;1109-030-B-20A:040077800;1109-030-B-20B:06;1109-030-B-20C:235040013;1109-030-B-20D:1703887890;1109-030-B-25A:040085400;1109-030-B-25B:05;1109-030-B-25C:1704192278;1109-030-B-30:000000000021;1109-030-B-40:001693398400;1109-030-B-45:001703254987;1109-030-B-50A:000000000000000;1109-030-B-50B:00000000000000000000;1109-030-B-50C:000000000000000000000000000000;1109-030-B-60A:000000000;1109-030-B-60B:00;1109-030-B-60C:0000000000;1109-030-B-60D:00000000;1109-030-B-60E:000000000;1109-030-B-60F:000;1109-030-B-60G:0;1109-030-B-60H:00;1109-030-B-60I:000;1109-030-B-60J:0;1109-030-B-60K:00;1109-030-B-60L:000000000;1109-030-B-60M:00;1109-030-B-60N:0;1109-030-B-70:0000;"
+            register_mower_info_rep = request("POST", f"{app_api}/v3/service/common/RLM3/device/2", params={"fileName": "2.csv"}, headers={"Access-Token": access_token}, data=register_mower_info_payload, logger=logger, highlight_error=True)
+            _ = register_mower_info_rep.json()
+            if register_mower_info_rep.status_code == 200 and row in _["data"]["success"]:
+                logger.info(f"{row} mower_info register successfully")
+            else:
+                logger.error(f"mower_info register failed: {_["message"]}")
         else:
-            logger.error(f"r3_app_board register failed: {_["message"]}")
-
-        register_r3_info_payload = f"{row};000028;{formatted_time};{sn};1109-030-B-10A:010;1109-030-B-10B:3;1109-030-B-10C:01;1109-030-B-10D:000000000;1109-030-B-10E:00;1109-030-B-10F:0000000000;1109-030-B-20A:040077800;1109-030-B-20B:06;1109-030-B-20C:235040013;1109-030-B-20D:1703887890;1109-030-B-25A:040085400;1109-030-B-25B:05;1109-030-B-25C:1704192278;1109-030-B-30:000000000021;1109-030-B-40:001693398400;1109-030-B-45:001703254987;1109-030-B-50A:000000000000000;1109-030-B-50B:00000000000000000000;1109-030-B-50C:000000000000000000000000000000;1109-030-B-60A:000000000;1109-030-B-60B:00;1109-030-B-60C:0000000000;1109-030-B-60D:00000000;1109-030-B-60E:000000000;1109-030-B-60F:000;1109-030-B-60G:0;1109-030-B-60H:00;1109-030-B-60I:000;1109-030-B-60J:0;1109-030-B-60K:00;1109-030-B-60L:000000000;1109-030-B-60M:00;1109-030-B-60N:0;1109-030-B-70:0000;"
-        register_r3_info_rep = request("POST", f"{app_api}/v3/service/common/RLM3/device/2", params={"fileName": "2.scv"}, headers={"Access-Token": access_token}, data=register_r3_info_payload, logger=logger, highlight_error=True)
-        _ = register_r3_info_rep.json()
-        if register_r3_info_rep.status_code == 200 and row in _["data"]["success"]:
-            logger.info(f"{row} r3_info successfully registered")
-        else:
-            logger.error(f"r3_info register failed: {_["message"]}")
+            register_ra_info_payload = f"{row};000038;{formatted_time};{sn};{mcu1};{mcu2};16;1;1;040099000;04;"
+            register_ra_info_rep = request("POST", f"{app_api}/v3/service/common/RA/device/3",
+                                                   params={"fileName": "3.csv"}, headers={"Access-Token": access_token},
+                                                   data=register_ra_info_payload, logger=logger,
+                                                   highlight_error=True)
+            _ = register_ra_info_rep.json()
+            if register_ra_info_rep.status_code == 200 and row in _["data"]["success"]:
+                logger.info(f"{row} ra_info register successfully")
+            else:
+                logger.error(f"ra_info register failed: {_["message"]}")
 
     except Exception as e:
         logger.error(e)
@@ -182,11 +195,20 @@ class MyApp(tk.Tk):
         i = 0
         # 创建环境下拉框
         label = tk.Label(left_frame, text="Environment")
-        label.grid(row=0, column=0, padx=2, pady=2, sticky='e')
+        label.grid(row=i, column=0, padx=2, pady=2, sticky='e')
         self.env_combo = ttk.Combobox(left_frame, state="readonly", width=25)
         self.env_combo['values'] = ('DEV', 'DEMO')
         self.env_combo.current(0)
         self.env_combo.grid(row=i, column=1, padx=2, pady=2, sticky='w')
+        i += 1
+
+        # 创建类型下拉框
+        label = tk.Label(left_frame, text="Device Type")
+        label.grid(row=i, column=0, padx=2, pady=2, sticky='e')
+        self.type_combo = ttk.Combobox(left_frame, state="readonly", width=25)
+        self.type_combo['values'] = ('Mower', 'RA')
+        self.type_combo.current(0)
+        self.type_combo.grid(row=i, column=1, padx=2, pady=2, sticky='w')
         i += 1
 
         def create_label_entry_button(frame, name, default="", width=40, row=0, column=0):
@@ -220,12 +242,13 @@ class MyApp(tk.Tk):
 
         def click_register():
             env = self.env_combo.get()
+            device_type = self.type_combo.get()
             row = self.row_entry.get().strip().replace(" ", "")
             sn = self.sn_entry.get().strip().replace(" ", "")
             mcu1 = self.MCU1_text.get("1.0", tk.END).strip().replace(" ", "")
             mcu2 = self.MCU2_text.get("1.0", tk.END).strip().replace(" ", "")
             self.logger.info(f"{env=} {row=} {sn=} {mcu1=} {mcu2=}")
-            register(env, row, sn, mcu1, mcu2, self.logger)
+            register(env, device_type, row, sn, mcu1, mcu2, self.logger)
 
         self.register_button = tk.Button(left_frame, text="Register", fg="green", width=10, command=lambda: async_call(click_register))
         self.register_button.grid(row=i, column=1, padx=2, sticky='w')
