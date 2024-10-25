@@ -1,5 +1,3 @@
-from wsgiref import headers
-
 import requests
 import tkinter as tk
 import logging
@@ -60,80 +58,54 @@ def request(method, url, headers=None, files=None, data=None, params=None, auth=
     return rep
 
 
-def register(env, device_type, row, sn, mcu1, mcu2, logger=get_logger()):
+def register(env, device_type, row, sn, mcu1, mcu2, whole_device=True, logger=get_logger()):
     try:
-        envs = {"DEV": {"centralized_endpoint_api": "https://center-api.globe-groups.com/globe",
-                        "client_id": "SendService",
-                        "client_secret": "339ded25-e049-4a75-aa82-e635be12a412",
-                        "username": "vic.wang@globetools.com",
-                        "password": "Glb123456",
-                        "regionIso3": "CHN",
-                        "type": "0"
+        envs = {"DEV": {"centralized_endpoint_api": "https://api.globe-groups.com/globe",
+                        "username": "SendService01",
+                        "password": "QO1jtS2x",
                         },
                 "DEMO": {"centralized_endpoint_api": "https://api.globetechcorp.com/globe",
-                         "client_id": "SendService",
-                         "client_secret": "339ded25-e049-4a75-aa82-e635be12a412",
-                         "username": "vic.wang@globetools.com",
-                         "password": "Glb123456",
-                         "regionIso3": "SWE",
-                         "type": "1"
+                         "username": "SendService01",
+                        "password": "QO1jtS2x",
                          },
                 }
 
         centralized_endpoint_api = envs[env]["centralized_endpoint_api"]
-        client_id = envs[env]["client_id"]
-        client_secret = envs[env]["client_secret"]
+
         username = envs[env]["username"]
         password = envs[env]["password"]
-        region_iso3 = envs[env]["regionIso3"]
-        _type = envs[env]["type"]
-        device_api = ""
-        app_api = ""
-        guc_api = ""
 
-        get_region_body = {
-            "merchantId": "100000000000000000",
-            "type": _type,
-            "regionIso3": region_iso3
-        }
-        get_region_rep = request("POST", f"{centralized_endpoint_api}/world/country/getRegion", json=get_region_body, logger=logger, highlight_error=True)
-        if get_region_rep.status_code == 200:
-            urls = get_region_rep.json()["info"]["apiUrl"]
-            device_api = urls["app"]
-            app_api = urls["globe"]
-            guc_api = urls["guc"]
-        else:
-            raise_connection_error(get_region_rep)
+        get_token_payload = f'{{"account":"{username}","password":"{password}"}}'
 
-        get_token_payload = f"grant_type=password&client_id={client_id}&client_secret={client_secret}&username={username}&password={password}"
         access_token = ""
-        get_token_rep = request("POST", f"{guc_api}/connect/token", headers={"Content-Type": "application/x-www-form-urlencoded"}, data=get_token_payload, logger=logger, highlight_error=True)
+        get_token_rep = request("POST", f"{centralized_endpoint_api}/sys/index/login", headers={"Content-Type": "application/json;charset=UTF-8"}, data=get_token_payload, logger=logger, highlight_error=True)
         if get_token_rep.status_code == 200:
             _ = get_token_rep.json()
-            access_token = f"{_["token_type"]} {_["access_token"]}"
+            access_token = _["info"]["token"]
         else:
             raise_connection_error(get_token_rep)
 
         formatted_time = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
         if device_type == "Mower":
             register_mower_app_board_payload = f"{row};000042;{formatted_time};{sn};{mcu1};{mcu2};221;1;0;040085400;05;"
-            register_mower_app_board_rep = request("POST", f"{app_api}/v3/service/common/RLM3/device/1", params={"fileName": "1.csv"}, headers={"Access-Token": access_token}, data=register_mower_app_board_payload, logger=logger, highlight_error=True)
+            register_mower_app_board_rep = request("POST", f"{centralized_endpoint_api}/v3/service/common/RLM3/device/1", params={"fileName": "1.csv"}, headers={"Access-Token": access_token}, data=register_mower_app_board_payload, logger=logger, highlight_error=True)
             _ = register_mower_app_board_rep.json()
             if register_mower_app_board_rep.status_code == 200 and row in _["data"]["success"]:
                 logger.info(f"{row} mower_app_board register successfully")
             else:
                 logger.error(f"mower_app_board register failed: {_["message"]}")
-    
-            register_mower_info_payload = f"{row};000028;{formatted_time};{sn};1109-030-B-10A:010;1109-030-B-10B:3;1109-030-B-10C:01;1109-030-B-10D:000000000;1109-030-B-10E:00;1109-030-B-10F:0000000000;1109-030-B-20A:040077800;1109-030-B-20B:06;1109-030-B-20C:235040013;1109-030-B-20D:1703887890;1109-030-B-25A:040085400;1109-030-B-25B:05;1109-030-B-25C:1704192278;1109-030-B-30:000000000021;1109-030-B-40:001693398400;1109-030-B-45:001703254987;1109-030-B-50A:000000000000000;1109-030-B-50B:00000000000000000000;1109-030-B-50C:000000000000000000000000000000;1109-030-B-60A:000000000;1109-030-B-60B:00;1109-030-B-60C:0000000000;1109-030-B-60D:00000000;1109-030-B-60E:000000000;1109-030-B-60F:000;1109-030-B-60G:0;1109-030-B-60H:00;1109-030-B-60I:000;1109-030-B-60J:0;1109-030-B-60K:00;1109-030-B-60L:000000000;1109-030-B-60M:00;1109-030-B-60N:0;1109-030-B-70:0000;"
-            register_mower_info_rep = request("POST", f"{app_api}/v3/service/common/RLM3/device/2", params={"fileName": "2.csv"}, headers={"Access-Token": access_token}, data=register_mower_info_payload, logger=logger, highlight_error=True)
-            _ = register_mower_info_rep.json()
-            if register_mower_info_rep.status_code == 200 and row in _["data"]["success"]:
-                logger.info(f"{row} mower_info register successfully")
-            else:
-                logger.error(f"mower_info register failed: {_["message"]}")
+
+            if whole_device:
+                register_mower_info_payload = f"{row};000028;{formatted_time};{sn};1109-030-B-10A:010;1109-030-B-10B:3;1109-030-B-10C:01;1109-030-B-10D:000000000;1109-030-B-10E:00;1109-030-B-10F:0000000000;1109-030-B-20A:040077800;1109-030-B-20B:06;1109-030-B-20C:235040013;1109-030-B-20D:1703887890;1109-030-B-25A:040085400;1109-030-B-25B:05;1109-030-B-25C:1704192278;1109-030-B-30:000000000021;1109-030-B-40:001693398400;1109-030-B-45:001703254987;1109-030-B-50A:000000000000000;1109-030-B-50B:00000000000000000000;1109-030-B-50C:000000000000000000000000000000;1109-030-B-60A:000000000;1109-030-B-60B:00;1109-030-B-60C:0000000000;1109-030-B-60D:00000000;1109-030-B-60E:000000000;1109-030-B-60F:000;1109-030-B-60G:0;1109-030-B-60H:00;1109-030-B-60I:000;1109-030-B-60J:0;1109-030-B-60K:00;1109-030-B-60L:000000000;1109-030-B-60M:00;1109-030-B-60N:0;1109-030-B-70:0000;"
+                register_mower_info_rep = request("POST", f"{centralized_endpoint_api}/v3/service/common/RLM3/device/2", params={"fileName": "2.csv"}, headers={"Access-Token": access_token}, data=register_mower_info_payload, logger=logger, highlight_error=True)
+                _ = register_mower_info_rep.json()
+                if register_mower_info_rep.status_code == 200 and row in _["data"]["success"]:
+                    logger.info(f"{row} mower_info register successfully")
+                else:
+                    logger.error(f"mower_info register failed: {_["message"]}")
         else:
             register_ra_info_payload = f"{row};000038;{formatted_time};{sn};{mcu1};{mcu2};16;1;1;040099000;04;"
-            register_ra_info_rep = request("POST", f"{app_api}/v3/service/common/RA/device/3",
+            register_ra_info_rep = request("POST", f"{centralized_endpoint_api}/v3/service/common/RA/device/3",
                                                    params={"fileName": "3.csv"}, headers={"Access-Token": access_token},
                                                    data=register_ra_info_payload, logger=logger,
                                                    highlight_error=True)
@@ -211,7 +183,7 @@ class MyApp(tk.Tk):
         self.type_combo.grid(row=i, column=1, padx=2, pady=2, sticky='w')
         i += 1
 
-        def create_label_entry_button(frame, name, default="", width=40, row=0, column=0):
+        def create_label_entry(frame, name, default="", width=40, row=0, column=0):
             label = tk.Label(frame, text=name)
             label.grid(row=row, column=0, padx=2, pady=2, sticky='e')
             entry = tk.Entry(frame, width=width)
@@ -219,7 +191,7 @@ class MyApp(tk.Tk):
             entry.grid(row=row, column=1, padx=2, pady=2, sticky='w')
             return frame, label, entry
 
-        def create_label_text_button(frame, name, default="", width=40, row=0, column=0):
+        def create_label_text(frame, name, default="", width=40, row=0, column=0):
             label = tk.Label(frame, text=name)
             label.grid(row=row, column=0, padx=2, pady=2, sticky='e')
             text = tk.Text(frame, width=width, height=3)
@@ -228,30 +200,34 @@ class MyApp(tk.Tk):
             text.grid(row=row, column=1, padx=2, pady=2, sticky='w')
             return frame, label, text
 
-        self.row_entry = create_label_entry_button(left_frame, "Equipment ID", "00001560", row=i)[2]
+        self.row_entry = create_label_entry(left_frame, "Equipment ID", "00001560", row=i)[2]
         i += 1
 
-        self.sn_entry = create_label_entry_button(left_frame, "SN", "235060013", row=i)[2]
+        self.sn_entry = create_label_entry(left_frame, "SN", "235060013", row=i)[2]
         i += 1
 
-        self.MCU1_text = create_label_text_button(left_frame, "MCU1", "045D4989617E00FA68B6B765C8B4F72D", row=i)[2]
+        self.MCU1_text = create_label_text(left_frame, "MCU1", "045D4989617E00FA68B6B765C8B4F72D", row=i)[2]
         i += 1
 
-        self.MCU2_text = create_label_text_button(left_frame, "MCU2", "F7E8625100283EAF37F852F7617B47A1", row=i)[2]
+        self.MCU2_text = create_label_text(left_frame, "MCU2", "F7E8625100283EAF37F852F7617B47A1", row=i)[2]
         i += 1
 
         def click_register():
             env = self.env_combo.get()
-            device_type = self.type_combo.get()
+            whole_device_var = bool(self.whole_device_var.get())
             row = self.row_entry.get().strip().replace(" ", "")
             sn = self.sn_entry.get().strip().replace(" ", "")
             mcu1 = self.MCU1_text.get("1.0", tk.END).strip().replace(" ", "")
             mcu2 = self.MCU2_text.get("1.0", tk.END).strip().replace(" ", "")
+            device_type = self.type_combo.get()
             self.logger.info(f"{env=} {row=} {sn=} {mcu1=} {mcu2=}")
-            register(env, device_type, row, sn, mcu1, mcu2, self.logger)
+            register(env, device_type, row, sn, mcu1, mcu2, whole_device_var, self.logger)
 
         self.register_button = tk.Button(left_frame, text="Register", fg="green", width=10, command=lambda: async_call(click_register))
-        self.register_button.grid(row=i, column=1, padx=2, sticky='w')
+        self.register_button.grid(row=i, column=0, padx=2, sticky='e')
+        self.whole_device_var = tk.IntVar(value=1)
+        self.whole_device_check = tk.Checkbutton(left_frame, text="Register whole device", variable=self.whole_device_var)
+        self.whole_device_check.grid(row=i, column=1, padx=2, sticky='w')
 
         # 创建一个 ScrolledText 小部件用于显示日志
         i = 0
@@ -275,9 +251,8 @@ class MyApp(tk.Tk):
         self.log_handler.setFormatter(formatter)
 
         # 获取根日志记录器并添加处理器
-        logger = get_logger()
-        logger.setLevel(logging.INFO)
-        logger.addHandler(self.log_handler)
+        self.logger.setLevel(logging.INFO)
+        self.logger.addHandler(self.log_handler)
 
         def clear():
             self.log_widget.configure(state='normal')
