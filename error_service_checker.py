@@ -5,8 +5,10 @@ import io
 import threading
 import uuid
 import json
+import math
 import pandas as pd
 from urllib import parse
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from logger_config import get_logger, TextHandler
 from tkinter import filedialog, messagebox, scrolledtext
@@ -28,48 +30,177 @@ def get_token(domain, client_id, client_secret, scope="", logger=get_logger()):
     return f'{r_json["token_type"]} {r_json["access_token"]}'
 
 
-def check_error_return(domain, access_token, product, model, component, language, error_code, fault_code, content, suggestion, logger=get_logger()):
+BMS_sub_error_component = ('BMSWarnings', 'BMSErrors', 'BMSFatalErrors')
+
+
+def check_error_return(row, domain, access_token, sub_error_dict, logger=get_logger()):
+    result = {"result": "Pass", "detail": ""}
+    try:
+        product = row['product']
+        model = row['model number']
+        language = row['language']
+        component = row['component']
+        datapoint_component = row['datapoint_component']
+        error_code = row['error code']
+        fault_code = row['fault code']
+        content = row['content']
+        suggestion = row['suggestion']
+        error_level = row['error level']
+        error_category = row['error category']
+        version = row['version']
+        sub_error = None if row['is sub'] == 0 else row['is sub']
+    except KeyError as e:
+        logger.error(e, exc_info=True)
+        logger.error(f'An error occurred while checking \n[{row}]\nError is {e}')
+        result["result"] = f'Error'
+        result["detail"] = f'Cannot load data from column [{str(e).replace('KeyError: ', '')}]'
+        return result
+
+    def check_mandatory_field(field):
+        if field is None or field == '':
+            return False
+        elif isinstance(field, float) and math.isnan(field):
+            return False
+        else:
+            return True
+
+    for _ in ['product', 'model number', 'language', 'error code']:
+        if not check_mandatory_field(row[_]):
+            logger.error(f'Missing required field [{_}] in \n[{row}]\nPlease check your error code excel')
+            result["result"] = f'Error'
+            result["detail"] = f'Missing required field [{_}]'
+            return result
+
     logger.info(f"Checking {product=} {model=} {language=} {error_code=} {fault_code=}")
     url = f"{domain}/api/FaultCodeCategory/errorcodes"
-    payload_dict = {
-        "productCode": product,
-        "modelNumber": model,
-        "language": language,
-        "errorCodes": [
-            {
-                "datapointComponent": component,
-                "code": str(error_code)
-            }
-        ]
-    }
+
+    if datapoint_component not in BMS_sub_error_component:
+        payload_dict = {
+            "productCode": product,
+            "modelNumber": model,
+            "language": language,
+            "errorCodes": [
+                {
+                    "datapointComponent": datapoint_component,
+                    "code": str(error_code)
+                }
+            ]
+        }
+    else:
+        if sub_error == 1:
+            result["result"] = f'Ignore'
+            result["detail"] = f'This is sub error, it will be verified on the main error.'
+            return result
+        payload_dict = {
+            "productCode": product,
+            "modelNumber": model,
+            "language": language,
+            "errorCodes": [
+                {
+                    "datapointComponent": "BatteryPackErrorCode",
+                    "code": str(error_code)
+                },
+                {
+                    "datapointComponent": datapoint_component,
+                    "code": str(error_code)
+                }
+            ]
+        }
+        sub_error = sub_error_dict[f'{row["model number"]}_{row["datapoint_component"]}_{row["error code"]}_{row["language"]}']
+
     headers = {"Content-Type": "application/json", "Authorization": access_token}
     payload = json.dumps(payload_dict)
-    result = {"result": "Pass", "detail": ""}
     r = requests.request("POST", url=url, headers=headers, data=payload)
     try:
-        r_json = r.json()
+        if r.status_code == 200:
+            r_json = r.json()
+            if not (r_json.get("data") and r_json.get("data").get("errorList")):
+                msg = f'The response do not have errorList item\nResponse is {r.text}'
+                logger.error(msg)
+                result["result"] = f'Failed'
+                result["detail"] = msg
+                return result
+        else:
+            msg = f'Response code is {r.status_code}\nResponse is {r.text}'
+            logger.error(msg)
+            result["result"] = f'Failed'
+            result["detail"] = msg
+            return result
 
         def normalize_newlines(text):
             return text.replace("\r\n", "\n").replace("\r", "\n")
 
         def check_data(name, _result, expected, actual):
-            expected = normalize_newlines(expected)
-            actual = normalize_newlines(actual)
-            if expected != actual:
+            if isinstance(expected, str) and isinstance(actual, str):
+                expected = normalize_newlines(expected)
+                actual = normalize_newlines(actual)
+            matched = True
+            list_matched = True
+            if isinstance(expected, list) and isinstance(actual, list):
+                expected_hashed = [frozenset(d.items()) if isinstance(d, dict) else d for d in expected]
+                actual_hashed = [frozenset(d.items()) if isinstance(d, dict) else d for d in actual]
+                list_matched = Counter(expected_hashed) == Counter(actual_hashed)
+            else:
+                matched = expected == actual
+            if not list_matched or not matched:
                 _result["result"] = "Failed"
                 _result["detail"] = f'{_result["detail"]}{name} -> expected: [{expected}], but got [{actual}]\n'
 
-        check_data("component", result, r_json["data"]["errorList"][0]["component"], component)
-        check_data("dataPointComponent", result, r_json["data"]["errorList"][0]["dataPointComponent"], component)
-        check_data("faultCode", result, r_json["data"]["errorList"][0]["faultCode"], fault_code)
-        check_data("content", result, r_json["data"]["errorList"][0]["content"], content)
-        check_data("suggestion", result, r_json["data"]["errorList"][0]["suggestion"], suggestion)
+        if datapoint_component not in BMS_sub_error_component:
+            _i = 0
+        else:
+            _i = 1
+        check_data("component", result, component, r_json["data"]["errorList"][_i]["component"])
+        check_data("dataPointComponent", result, datapoint_component, r_json["data"]["errorList"][_i]["dataPointComponent"])
+        check_data("faultCode", result, fault_code, r_json["data"]["errorList"][_i]["faultCode"])
+        check_data("content", result, content, r_json["data"]["errorList"][_i]["content"])
+        check_data("suggestion", result, suggestion, r_json["data"]["errorList"][_i]["suggestion"])
+        check_data("error level", result, error_level, r_json["data"]["errorList"][_i]["level"])
+        check_data("error category", result, error_category, r_json["data"]["errorList"][_i]["errorCategory"])
+        check_data("version", result, version, r_json["data"]["errorList"][_i]["version"])
+        check_data("sub error", result, sub_error, r_json["data"]["errorList"][_i]["subError"])
     except Exception as e:
-        logger.error(e)
+        logger.error(e, exc_info=True)
+        logger.error(f'An error occurred while checking {product=} {model=} {language=} {error_code=} {fault_code=}.\nError is {e}\nResponse is {r.text}')
         result["result"] = f'Error'
         result["detail"] = f'{result["detail"]}\nError is {e}\nResponse is {r.text}'
 
     return result
+
+
+# 将数字转换为二进制形式，然后拆解为其二进制位对应的权值，例如11变为[8, 2, 1]
+def decompose_to_powers_of_two(number):
+    binary = bin(int(number))[2:]  # 转换为二进制并去掉 "0b"
+    result = []
+    for i, bit in enumerate(reversed(binary)):  # 从低位开始遍历
+        if bit == '1':
+            result.append(2**i)  # 计算对应权值
+    return result[::-1]  # 翻转结果使其从大到小排列
+
+
+def get_BMS_sub_error_dict(df) -> dict:
+    filtered_df = df[(df['datapoint_component'].isin(BMS_sub_error_component)) & (df['is sub'] == 0)]
+    result_dict = dict()
+    for index, row in filtered_df.iterrows():
+        sub_code_list = [str(x) for x in decompose_to_powers_of_two(row["error code"])]
+        if '1' in sub_code_list:
+            sub_code_list.append("SystemClock")
+        sub_error_df = df[(df['model number'] == row["model number"]) &
+                          (df['datapoint_component'] == row["datapoint_component"]) &
+                          (df['language'] == row["language"]) &
+                          (df['is sub'] == 1) &
+                          (df['error code'].isin(sub_code_list))]
+        sub_error_list = list()
+        for index, sub_error_row in sub_error_df.iterrows():
+            _ = {
+                "faultCode": sub_error_row['fault code'],
+                "content": sub_error_row['content'],
+                "suggestion": '' if math.isnan(sub_error_row['suggestion']) else sub_error_row['suggestion'],
+                "level": str(sub_error_row['error level']),
+            }
+            sub_error_list.append(_)
+        result_dict[f'{row["model number"]}_{row["datapoint_component"]}_{row["error code"]}_{row["language"]}'] = sub_error_list
+    return result_dict
 
 
 # 处理 Excel 文件函数
@@ -83,18 +214,21 @@ def process_excel_files(domain, token, file_list, save_path, logger):
                 _ = pd.read_excel(f, sheet_name=sheet_name)
                 df = pd.concat([df, _], ignore_index=True)
 
+        # 生成sub error dict
+        sub_error_dict = get_BMS_sub_error_dict(df)
+
         # 逐行处理
         # df["result"] = df.apply(lambda x: check_error_return(domain, token, x['product'], x['model number'], x['component'], x['language'], x['error code'], x['fault code'], x['content'], x['suggestion'], logger=logger), axis=1)
 
         # 多线程处理函数
-        def process_row_with_closure(domain, token, logger):  # 将额外参数封闭到函数内部，避免显式传递参数
+        def process_row_with_closure(domain, token, sub_error_dict, logger):  # 将额外参数封闭到函数内部，避免显式传递参数
             def inner(x):
-                return check_error_return(domain, token, x['product'], x['model number'], x['component'], x['language'], x['error code'], x['fault code'], x['content'], x['suggestion'], logger=logger)
+                return check_error_return(x, domain, token, sub_error_dict, logger)
             return inner
 
         # 使用 ThreadPoolExecutor 并行处理
         with ThreadPoolExecutor() as executor:
-            process_row = process_row_with_closure(domain, token, logger)
+            process_row = process_row_with_closure(domain, token, sub_error_dict, logger)
             results = list(executor.map(process_row, [row for _, row in df.iterrows()]))
 
         # 将结果分配回 DataFrame
@@ -102,7 +236,10 @@ def process_excel_files(domain, token, file_list, save_path, logger):
 
         # 保存结果为 Excel 文件
         df.to_excel(save_path, index=False)
-        messagebox.showinfo("Completed", f"Processing completed, file saved to: {save_path}")
+
+        # 统计结果
+        result_counts = dict(Counter(item["result"] for item in results))
+        messagebox.showinfo("Completed", f"Process completed, {result_counts}, result detail saved to: {save_path}")
 
     except Exception as e:
         messagebox.showerror("错误", str(e))
