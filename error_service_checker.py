@@ -23,7 +23,8 @@ def async_call(func, *args, **kwargs):
 def get_token(domain, client_id, client_secret, scope="", logger=get_logger()):
     url = f"{domain}/connect/token"
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
-    payload_dict = {"grant_type": "client_credentials", "client_id": client_id, "client_secret": client_secret, "scope": scope}
+    payload_dict = {"grant_type": "client_credentials", "client_id": client_id, "client_secret": client_secret,
+                    "scope": scope}
     payload = parse.urlencode(payload_dict)
     r = _request("POST", url=url, headers=headers, data=payload, logger=logger)
     r_json = r.json()
@@ -33,8 +34,21 @@ def get_token(domain, client_id, client_secret, scope="", logger=get_logger()):
 BMS_sub_error_component = ('BMSWarnings', 'BMSErrors', 'BMSFatalErrors')
 
 
+def normalize_newlines(text):
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def check_mandatory_field(field):
+    if field is None or field == '':
+        return False
+    elif isinstance(field, float) and math.isnan(field):
+        return False
+    else:
+        return True
+
+
 def check_error_return(row, domain, access_token, sub_error_dict, logger=get_logger()):
-    result = {"result": "Pass", "detail": ""}
+    result = {"result": "Pass", "detail": "Pass"}
     try:
         product = row['product']
         model = row['model number']
@@ -56,14 +70,6 @@ def check_error_return(row, domain, access_token, sub_error_dict, logger=get_log
         result["detail"] = f'Cannot load data from column [{str(e).replace('KeyError: ', '')}]'
         return result
 
-    def check_mandatory_field(field):
-        if field is None or field == '':
-            return False
-        elif isinstance(field, float) and math.isnan(field):
-            return False
-        else:
-            return True
-
     for _ in ['product', 'model number', 'language', 'error code']:
         if not check_mandatory_field(row[_]):
             logger.error(f'Missing required field [{_}] in \n[{row}]\nPlease check your error code excel')
@@ -72,6 +78,80 @@ def check_error_return(row, domain, access_token, sub_error_dict, logger=get_log
             return result
 
     logger.info(f"Checking {product=} {model=} {language=} {error_code=} {fault_code=}")
+
+    def call_check_error_codes(row, domain, access_token, sub_error_dict, product, model, language, component,
+                               datapoint_component, error_code, fault_code, content, suggestion, error_level,
+                               error_category, version, sub_error, logger):
+        return check_error_codes(row, domain, access_token, sub_error_dict, product, model, language, component,
+                                 datapoint_component, error_code, fault_code, content, suggestion, error_level,
+                                 error_category, version, sub_error, logger)
+
+    def call_check_error_descriptions(domain, access_token, product, model, language, datapoint_component, error_code,
+                                      fault_code, content, suggestion, sub_error, logger):
+        return check_error_descriptions(domain, access_token, product, model, language, datapoint_component, error_code,
+                                        fault_code, content, suggestion, sub_error, logger)
+
+    # 用 ThreadPoolExecutor 调用两个方法并等待返回
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        future1 = executor.submit(call_check_error_codes, row, domain, access_token, sub_error_dict, product, model,
+                                  language,
+                                  component, datapoint_component, error_code, fault_code, content, suggestion,
+                                  error_level,
+                                  error_category, version, sub_error, get_logger())
+        future2 = executor.submit(call_check_error_descriptions, domain, access_token, product, model, language,
+                                  datapoint_component, error_code, fault_code, content, suggestion, sub_error,
+                                  get_logger())
+
+        # 获取结果
+        error_codes_result = future1.result()
+        error_descriptions_result = future2.result()
+
+    if error_codes_result["result"] == 'Error' or error_descriptions_result["result"] == 'Error':
+        result["result"] = 'Error'
+        result["detail"] = 'Please check the sub detail'
+    elif error_codes_result["result"] == 'Failed' or error_descriptions_result["result"] == 'Failed':
+        result["result"] = 'Failed'
+        result["detail"] = 'Please check the sub detail'
+
+    result["error_codes_detail"] = error_codes_result["detail"]
+    result["error_descriptions_detail"] = error_descriptions_result["detail"]
+
+    return result
+
+
+def check_data(name, _result, expected, actual):
+    if isinstance(expected, str) and isinstance(actual, str):
+        expected = normalize_newlines(expected)
+        actual = normalize_newlines(actual)
+    matched = True
+    list_matched = True
+    if isinstance(expected, list) and isinstance(actual, list):
+        expected_hashed = [frozenset(d.items()) if isinstance(d, dict) else d for d in expected]
+        actual_hashed = [frozenset(d.items()) if isinstance(d, dict) else d for d in actual]
+        list_matched = Counter(expected_hashed) == Counter(actual_hashed)
+    else:
+        matched = expected == actual
+    if not list_matched or not matched:
+        _result["result"] = "Failed"
+        _result["detail"] = f'{_result["detail"]}{name} -> expected: [{expected}], but got [{actual}]\n'
+
+
+def check_error_codes(row, domain, access_token, sub_error_dict,
+                      product,
+                      model,
+                      language,
+                      component,
+                      datapoint_component,
+                      error_code,
+                      fault_code,
+                      content,
+                      suggestion,
+                      error_level,
+                      error_category,
+                      version,
+                      sub_error,
+                      logger=get_logger()):
+    result = {"result": "Pass", "detail": ""}
     url = f"{domain}/api/FaultCodeCategory/errorcodes"
 
     if datapoint_component not in BMS_sub_error_component:
@@ -106,7 +186,8 @@ def check_error_return(row, domain, access_token, sub_error_dict, logger=get_log
                 }
             ]
         }
-        sub_error = sub_error_dict[f'{row["model number"]}_{row["datapoint_component"]}_{row["error code"]}_{row["language"]}']
+        sub_error = sub_error_dict[
+            f'{row["model number"]}_{row["datapoint_component"]}_{row["error code"]}_{row["language"]}']
 
     headers = {"Content-Type": "application/json", "Authorization": access_token}
     payload = json.dumps(payload_dict)
@@ -115,7 +196,7 @@ def check_error_return(row, domain, access_token, sub_error_dict, logger=get_log
         if r.status_code == 200:
             r_json = r.json()
             if not (r_json.get("data") and r_json.get("data").get("errorList")):
-                msg = f'The response do not have errorList item\nResponse is {r.text}'
+                msg = f'The response do not have "errorList" item\nResponse is {r.text}'
                 logger.error(msg)
                 result["result"] = f'Failed'
                 result["detail"] = msg
@@ -127,31 +208,13 @@ def check_error_return(row, domain, access_token, sub_error_dict, logger=get_log
             result["detail"] = msg
             return result
 
-        def normalize_newlines(text):
-            return text.replace("\r\n", "\n").replace("\r", "\n")
-
-        def check_data(name, _result, expected, actual):
-            if isinstance(expected, str) and isinstance(actual, str):
-                expected = normalize_newlines(expected)
-                actual = normalize_newlines(actual)
-            matched = True
-            list_matched = True
-            if isinstance(expected, list) and isinstance(actual, list):
-                expected_hashed = [frozenset(d.items()) if isinstance(d, dict) else d for d in expected]
-                actual_hashed = [frozenset(d.items()) if isinstance(d, dict) else d for d in actual]
-                list_matched = Counter(expected_hashed) == Counter(actual_hashed)
-            else:
-                matched = expected == actual
-            if not list_matched or not matched:
-                _result["result"] = "Failed"
-                _result["detail"] = f'{_result["detail"]}{name} -> expected: [{expected}], but got [{actual}]\n'
-
         if datapoint_component not in BMS_sub_error_component:
             _i = 0
         else:
             _i = 1
         check_data("component", result, component, r_json["data"]["errorList"][_i]["component"])
-        check_data("dataPointComponent", result, datapoint_component, r_json["data"]["errorList"][_i]["dataPointComponent"])
+        check_data("dataPointComponent", result, datapoint_component,
+                   r_json["data"]["errorList"][_i]["dataPointComponent"])
         check_data("faultCode", result, fault_code, r_json["data"]["errorList"][_i]["faultCode"])
         check_data("content", result, content, r_json["data"]["errorList"][_i]["content"])
         check_data("suggestion", result, suggestion, r_json["data"]["errorList"][_i]["suggestion"])
@@ -161,10 +224,82 @@ def check_error_return(row, domain, access_token, sub_error_dict, logger=get_log
         check_data("sub error", result, sub_error, r_json["data"]["errorList"][_i]["subError"])
     except Exception as e:
         logger.error(e, exc_info=True)
-        logger.error(f'An error occurred while checking {product=} {model=} {language=} {error_code=} {fault_code=}.\nError is {e}\nResponse is {r.text}')
+        logger.error(
+            f'An error occurred while checking {product=} {model=} {language=} {error_code=} {fault_code=}.\nError is {e}\nResponse is {r.text}')
         result["result"] = f'Error'
         result["detail"] = f'{result["detail"]}\nError is {e}\nResponse is {r.text}'
 
+    if result["result"] == "Pass":
+        result["detail"] = "Pass"
+    return result
+
+
+def check_error_descriptions(domain, access_token,
+                             product,
+                             model,
+                             language,
+                             datapoint_component,
+                             error_code,
+                             fault_code,
+                             content,
+                             suggestion,
+                             sub_error,
+                             logger=get_logger()):
+    result = {"result": "Pass", "detail": ""}
+    url = f"{domain}/api/FaultCodeCategory/errorDescriptions"
+
+    if datapoint_component in BMS_sub_error_component and sub_error == 1:
+        result["result"] = f'Ignore'
+        result["detail"] = f'This is sub error, it will be verified on the main error.'
+        return result
+    else:
+        payload_dict = {
+            "productCode": product,
+            "modelNumber": model,
+            "language": language,
+            "faultCodes": [fault_code]
+        }
+
+    headers = {"Content-Type": "application/json", "Authorization": access_token}
+    payload = json.dumps(payload_dict)
+    r = requests.request("POST", url=url, headers=headers, data=payload)
+
+    try:
+        if r.status_code == 200:
+            r_json = r.json()
+            if not r_json.get("data"):
+                msg = f'The response do not have "data" item\nResponse is {r.text}'
+                logger.error(msg)
+                result["result"] = f'Failed'
+                result["detail"] = msg
+                return result
+        else:
+            msg = f'Response code is {r.status_code}\nResponse is {r.text}'
+            logger.error(msg)
+            result["result"] = f'Failed'
+            result["detail"] = msg
+            return result
+
+        _i = 0
+        if datapoint_component == 'BMSWarnings':
+            _i = 1
+        elif datapoint_component == 'BMSErrors':
+            _i = 2
+        elif datapoint_component == 'BMSFatalErrors':
+            _i = 3
+        check_data("source fault code", result, fault_code, r_json["data"][_i]["sourceFaultCode"])
+        check_data("fault code", result, fault_code, r_json["data"][_i]["faultCode"])
+        check_data("content", result, content, r_json["data"][_i]["content"])
+        check_data("suggestion", result, suggestion, r_json["data"][_i]["suggestion"])
+    except Exception as e:
+        logger.error(e, exc_info=True)
+        logger.error(
+            f'An error occurred while checking {product=} {model=} {language=} {error_code=} {fault_code=}.\nError is {e}\nResponse is {r.text}')
+        result["result"] = f'Error'
+        result["detail"] = f'{result["detail"]}\nError is {e}\nResponse is {r.text}'
+
+    if result["result"] == "Pass":
+        result["detail"] = "Pass"
     return result
 
 
@@ -174,7 +309,7 @@ def decompose_to_powers_of_two(number):
     result = []
     for i, bit in enumerate(reversed(binary)):  # 从低位开始遍历
         if bit == '1':
-            result.append(2**i)  # 计算对应权值
+            result.append(2 ** i)  # 计算对应权值
     return result[::-1]  # 翻转结果使其从大到小排列
 
 
@@ -199,7 +334,8 @@ def get_BMS_sub_error_dict(df) -> dict:
                 "level": str(sub_error_row['error level']),
             }
             sub_error_list.append(_)
-        result_dict[f'{row["model number"]}_{row["datapoint_component"]}_{row["error code"]}_{row["language"]}'] = sub_error_list
+        result_dict[
+            f'{row["model number"]}_{row["datapoint_component"]}_{row["error code"]}_{row["language"]}'] = sub_error_list
     return result_dict
 
 
@@ -224,6 +360,7 @@ def process_excel_files(domain, token, file_list, save_path, logger):
         def process_row_with_closure(domain, token, sub_error_dict, logger):  # 将额外参数封闭到函数内部，避免显式传递参数
             def inner(x):
                 return check_error_return(x, domain, token, sub_error_dict, logger)
+
             return inner
 
         # 使用 ThreadPoolExecutor 并行处理
@@ -232,7 +369,7 @@ def process_excel_files(domain, token, file_list, save_path, logger):
             results = list(executor.map(process_row, [row for _, row in df.iterrows()]))
 
         # 将结果分配回 DataFrame
-        df[["result", "detail"]] = pd.DataFrame(results, columns=["result", "detail"])
+        df[["result", "detail", "error codes detail", "error descriptions detail"]] = pd.DataFrame(results, columns=["result", "detail", "error_codes_detail", "error_descriptions_detail"])
 
         # 保存结果为 Excel 文件
         df.to_excel(save_path, index=False)
@@ -282,7 +419,8 @@ Response Elapsed: {response.elapsed}
         logger.info(msg)
 
 
-def _request(method, url, headers=None, files=None, data=None, params=None, auth=None, cookies=None, hooks=None, json=None, logger=get_logger(), highlight_error=False):
+def _request(method, url, headers=None, files=None, data=None, params=None, auth=None, cookies=None, hooks=None,
+             json=None, logger=get_logger(), highlight_error=False):
     session = requests.Session()
     _id = str(uuid.uuid4())
     req = requests.Request(method, url, headers, files, data, params, auth, cookies, hooks, json)
@@ -395,16 +533,19 @@ class MyApp(tk.Tk):
 
         i = 0
 
-        self.entry_guc_url = create_label_entry(left_frame, name="GUC URL", default="https://dev6-guc.globetools.com", width=50, row=i)
+        self.entry_guc_url = create_label_entry(left_frame, name="GUC URL", default="https://dev6-guc.globetools.com",
+                                                width=50, row=i)
         i += 1
 
-        self.entry_es_url = create_label_entry(left_frame, name="Error Service URL", default="https://dev6-cantondeviis.globetools.com:5028", width=50, row=i)
+        self.entry_es_url = create_label_entry(left_frame, name="Error Service URL",
+                                               default="https://dev6-cantondeviis.globetools.com:5028", width=50, row=i)
         i += 1
 
         self.entry_client_id = create_label_entry(left_frame, name="Client ID", default="A3SService", width=50, row=i)
         i += 1
 
-        self.entry_client_secret = create_label_entry(left_frame, name="Client Secret", default="BD2F91CB-6DCD-4BB1-82EE-5951C4753EBE", width=50, row=i)
+        self.entry_client_secret = create_label_entry(left_frame, name="Client Secret",
+                                                      default="BD2F91CB-6DCD-4BB1-82EE-5951C4753EBE", width=50, row=i)
         i += 1
 
         # A 表选择框
