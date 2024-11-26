@@ -48,7 +48,14 @@ def check_mandatory_field(field):
 
 
 def check_error_return(row, domain, access_token, sub_error_dict, logger=get_logger()):
-    result = {"result": "Pass", "detail": "Pass"}
+    result = {"result": "Pass", "detail": ""}
+
+    for _ in ['product', 'model number', 'language', 'error code']:
+        if not check_mandatory_field(row[_]):
+            logger.error(f'Missing required field [{_}] in \n[{row}]\nPlease check your error code excel')
+            result["result"] = f'Error'
+            result["detail"] = f'Missing required field [{_}]'
+            return result
     try:
         product = row['product']
         model = row['model number']
@@ -69,15 +76,6 @@ def check_error_return(row, domain, access_token, sub_error_dict, logger=get_log
         result["result"] = f'Error'
         result["detail"] = f'Cannot load data from column [{str(e).replace('KeyError: ', '')}]'
         return result
-
-    for _ in ['product', 'model number', 'language', 'error code']:
-        if not check_mandatory_field(row[_]):
-            logger.error(f'Missing required field [{_}] in \n[{row}]\nPlease check your error code excel')
-            result["result"] = f'Error'
-            result["detail"] = f'Missing required field [{_}]'
-            return result
-
-    logger.info(f"Checking {product=} {model=} {language=} {error_code=} {fault_code=}")
 
     def call_check_error_codes(row, domain, access_token, sub_error_dict, product, model, language, component,
                                datapoint_component, error_code, fault_code, content, suggestion, error_level,
@@ -133,7 +131,7 @@ def check_data(name, _result, expected, actual):
         matched = expected == actual
     if not list_matched or not matched:
         _result["result"] = "Failed"
-        _result["detail"] = f'{_result["detail"]}{name} -> expected: [{expected}], but got [{actual}]\n'
+        _result["detail"] = f'{_result["detail"]}[{name}] -> expected: [{expected}], but got [{actual}]\n'
 
 
 def check_error_codes(row, domain, access_token, sub_error_dict,
@@ -151,6 +149,7 @@ def check_error_codes(row, domain, access_token, sub_error_dict,
                       version,
                       sub_error,
                       logger=get_logger()):
+    logger.info(f"Checking FaultCodeCategory/errorcodes API... {product=} {model=} {language=} {error_code=} {fault_code=}")
     result = {"result": "Pass", "detail": ""}
     url = f"{domain}/api/FaultCodeCategory/errorcodes"
 
@@ -197,13 +196,11 @@ def check_error_codes(row, domain, access_token, sub_error_dict,
             r_json = r.json()
             if not (r_json.get("data") and r_json.get("data").get("errorList")):
                 msg = f'The response do not have "errorList" item\nResponse is {r.text}'
-                logger.error(msg)
                 result["result"] = f'Failed'
                 result["detail"] = msg
                 return result
         else:
             msg = f'Response code is {r.status_code}\nResponse is {r.text}'
-            logger.error(msg)
             result["result"] = f'Failed'
             result["detail"] = msg
             return result
@@ -229,8 +226,6 @@ def check_error_codes(row, domain, access_token, sub_error_dict,
         result["result"] = f'Error'
         result["detail"] = f'{result["detail"]}\nError is {e}\nResponse is {r.text}'
 
-    if result["result"] == "Pass":
-        result["detail"] = "Pass"
     return result
 
 
@@ -245,6 +240,7 @@ def check_error_descriptions(domain, access_token,
                              suggestion,
                              sub_error,
                              logger=get_logger()):
+    logger.info(f"Checking FaultCodeCategory/errorDescriptions API... {product=} {model=} {language=} {error_code=} {fault_code=}")
     result = {"result": "Pass", "detail": ""}
     url = f"{domain}/api/FaultCodeCategory/errorDescriptions"
 
@@ -269,13 +265,11 @@ def check_error_descriptions(domain, access_token,
             r_json = r.json()
             if not r_json.get("data"):
                 msg = f'The response do not have "data" item\nResponse is {r.text}'
-                logger.error(msg)
                 result["result"] = f'Failed'
                 result["detail"] = msg
                 return result
         else:
             msg = f'Response code is {r.status_code}\nResponse is {r.text}'
-            logger.error(msg)
             result["result"] = f'Failed'
             result["detail"] = msg
             return result
@@ -298,8 +292,92 @@ def check_error_descriptions(domain, access_token,
         result["result"] = f'Error'
         result["detail"] = f'{result["detail"]}\nError is {e}\nResponse is {r.text}'
 
-    if result["result"] == "Pass":
-        result["detail"] = "Pass"
+    return result
+
+
+def generate_rule_df(domain, token, df, logger=get_logger()):
+    rule_df = df[df['is sub'] == 0]
+    key_columns = ["product", "model number", "datapoint index", "component", "datapoint_component"]
+    rule_df = rule_df[key_columns].drop_duplicates()
+
+    # 多线程处理函数
+    def process_row_with_closure(domain, token, key_columns, logger):  # 将额外参数封闭到函数内部，避免显式传递参数
+        def inner(x):
+            return check_fault_code_rule(x, domain, token, key_columns, logger)
+
+        return inner
+
+    # 使用 ThreadPoolExecutor 并行处理
+    with ThreadPoolExecutor() as executor:
+        process_row = process_row_with_closure(domain, token, key_columns, logger)
+        results = list(executor.map(process_row, [row for _, row in rule_df.iterrows()]))
+
+    # 确保 rule_df 的索引与 results 对齐
+    rule_df = rule_df.reset_index(drop=True)
+    rule_df[["result", "detail"]] = pd.DataFrame(results, columns=["result", "detail"])
+    rule_df["fault code"] = "(check the fault coder rule)"  # 添加说明
+
+    return rule_df
+
+
+def check_fault_code_rule(row, domain, access_token, key_columns, logger=get_logger()):
+    result = {"result": "Pass", "detail": ""}
+
+    for _ in key_columns:
+        if not check_mandatory_field(row[_]):
+            logger.error(f'Missing required field [{_}] in \n[{row}]\nPlease check your error code excel')
+            result["result"] = f'Error'
+            result["detail"] = f'Missing required field [{_}]'
+            return result
+
+    product = row['product']
+    model = row['model number']
+    datapoint = str(row['datapoint index'])
+    component = row['component']
+    datapoint_component = row['datapoint_component']
+
+    logger.info(f"Checking FaultCodeRule/datapoints API... {product=} {model=}")
+    url = f"{domain}/api/FaultCodeRule/datapoints"
+    payload_dict = {
+        product: [model]
+    }
+
+    headers = {"Content-Type": "application/json", "Authorization": access_token}
+    payload = json.dumps(payload_dict)
+    r = requests.request("POST", url=url, headers=headers, data=payload)
+
+    try:
+        if r.status_code == 200:
+            r_json = r.json()
+            if not (r_json.get("data") and r_json.get("data").get(product) and r_json.get("data").get(product).get(
+                    model)):
+                msg = f'The response do not have corresponding item\nResponse is {r.text}'
+                result["result"] = f'Failed'
+                result["detail"] = msg
+                return result
+        else:
+            msg = f'Response code is {r.status_code}\nResponse is {r.text}'
+            result["result"] = f'Failed'
+            result["detail"] = msg
+            return result
+
+        datapoints_list = r_json["data"][product][model]
+        datapoints_dict = {x["datapoint"]: x for x in datapoints_list}
+        if datapoint in datapoints_dict:
+            _ = datapoints_dict[datapoint]
+            check_data(f"DP[{datapoint}]|[component]", result, component, _.get("component"))
+            check_data(f"DP[{datapoint}]|[datapoint component]", result, datapoint_component, _.get("datapointComponent"))
+        else:
+            result["result"] = "Failed"
+            result["detail"] = f'Missing information of datapoint [{datapoint}]'
+
+    except Exception as e:
+        logger.error(e, exc_info=True)
+        logger.error(
+            f'An error occurred while checking {product=} {model=}.\nError is {e}\nResponse is {r.text}')
+        result["result"] = f'Error'
+        result["detail"] = f'{result["detail"]}\nError is {e}\nResponse is {r.text}'
+
     return result
 
 
@@ -369,7 +447,14 @@ def process_excel_files(domain, token, file_list, save_path, logger):
             results = list(executor.map(process_row, [row for _, row in df.iterrows()]))
 
         # 将结果分配回 DataFrame
-        df[["result", "detail", "error codes detail", "error descriptions detail"]] = pd.DataFrame(results, columns=["result", "detail", "error_codes_detail", "error_descriptions_detail"])
+        df[["result", "detail", "error codes detail", "error descriptions detail"]] = pd.DataFrame(results,
+                                                                                                   columns=["result",
+                                                                                                            "detail",
+                                                                                                            "error_codes_detail",
+                                                                                                            "error_descriptions_detail"])
+
+        rule_df = generate_rule_df(domain, token, df, logger)
+        df = pd.concat([df, rule_df], ignore_index=True)
 
         # 保存结果为 Excel 文件
         df.to_excel(save_path, index=False)
