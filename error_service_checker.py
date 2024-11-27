@@ -14,12 +14,6 @@ from logger_config import get_logger, TextHandler
 from tkinter import filedialog, messagebox, scrolledtext
 
 
-def async_call(func, *args, **kwargs):
-    t = threading.Thread(target=func, args=args, kwargs=kwargs)
-    t.daemon = True
-    t.start()
-
-
 def get_token(domain, client_id, client_secret, scope="", logger=get_logger()):
     url = f"{domain}/connect/token"
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
@@ -59,6 +53,12 @@ def check_error_return(row, domain, access_token, sub_error_dict, logger=get_log
     try:
         product = row['product']
         model = row['model number']
+        if isinstance(model, float):  # 处理纯数字的model number
+            if math.isnan(model):
+                model = ""
+            else:
+                model = (int(model))
+        model = str(model)
         language = row['language']
         component = row['component']
         datapoint_component = row['datapoint_component']
@@ -68,8 +68,14 @@ def check_error_return(row, domain, access_token, sub_error_dict, logger=get_log
         suggestion = row['suggestion']
         error_level = row['error level']
         error_category = row['error category']
+        if isinstance(error_category, float):  # 处理没有值的error category
+            if math.isnan(error_category):
+                error_category = ""
         version = row['version']
         sub_error = None if row['is sub'] == 0 else row['is sub']
+        _format = row['format']
+        if _format == "Bin" and not sub_error:  # 处理Bin格式的主error code
+            error_code = 2 ** int(error_code)
     except KeyError as e:
         logger.error(e, exc_info=True)
         logger.error(f'An error occurred while checking \n[{row}]\nError is {e}')
@@ -79,15 +85,15 @@ def check_error_return(row, domain, access_token, sub_error_dict, logger=get_log
 
     def call_check_error_codes(row, domain, access_token, sub_error_dict, product, model, language, component,
                                datapoint_component, error_code, fault_code, content, suggestion, error_level,
-                               error_category, version, sub_error, logger):
+                               error_category, version, sub_error, _format, logger):
         return check_error_codes(row, domain, access_token, sub_error_dict, product, model, language, component,
                                  datapoint_component, error_code, fault_code, content, suggestion, error_level,
-                                 error_category, version, sub_error, logger)
+                                 error_category, version, sub_error, _format, logger)
 
     def call_check_error_descriptions(domain, access_token, product, model, language, datapoint_component, error_code,
-                                      fault_code, content, suggestion, sub_error, logger):
+                                      fault_code, content, suggestion, sub_error, _format, logger):
         return check_error_descriptions(domain, access_token, product, model, language, datapoint_component, error_code,
-                                        fault_code, content, suggestion, sub_error, logger)
+                                        fault_code, content, suggestion, sub_error, _format, logger)
 
     # 用 ThreadPoolExecutor 调用两个方法并等待返回
     with ThreadPoolExecutor(max_workers=2) as executor:
@@ -95,9 +101,9 @@ def check_error_return(row, domain, access_token, sub_error_dict, logger=get_log
                                   language,
                                   component, datapoint_component, error_code, fault_code, content, suggestion,
                                   error_level,
-                                  error_category, version, sub_error, get_logger())
+                                  error_category, version, sub_error, _format, get_logger())
         future2 = executor.submit(call_check_error_descriptions, domain, access_token, product, model, language,
-                                  datapoint_component, error_code, fault_code, content, suggestion, sub_error,
+                                  datapoint_component, error_code, fault_code, content, suggestion, sub_error, _format,
                                   get_logger())
 
         # 获取结果
@@ -148,6 +154,7 @@ def check_error_codes(row, domain, access_token, sub_error_dict,
                       error_category,
                       version,
                       sub_error,
+                      _format,
                       logger=get_logger()):
     logger.info(f"Checking FaultCodeCategory/errorcodes API... {product=} {model=} {language=} {error_code=} {fault_code=}")
     result = {"result": "Pass", "detail": ""}
@@ -239,6 +246,7 @@ def check_error_descriptions(domain, access_token,
                              content,
                              suggestion,
                              sub_error,
+                             _format,
                              logger=get_logger()):
     logger.info(f"Checking FaultCodeCategory/errorDescriptions API... {product=} {model=} {language=} {error_code=} {fault_code=}")
     result = {"result": "Pass", "detail": ""}
@@ -332,6 +340,12 @@ def check_fault_code_rule(row, domain, access_token, key_columns, logger=get_log
 
     product = row['product']
     model = row['model number']
+    if isinstance(model, float):
+        if math.isnan(model):
+            model = ""
+        else:
+            model = int(model)
+    model = str(model)
     datapoint = str(row['datapoint index'])
     component = row['component']
     datapoint_component = row['datapoint_component']
@@ -535,7 +549,7 @@ def start_processing(my_app):
         token = get_token(entry_guc_url, client_id, client_secret, scope='ErrorServiceApi', logger=my_app.logger)
         my_app.logger.info(token)
 
-        async_call(process_excel_files, entry_es_url, token, excel_file, save_path, my_app.logger)
+        process_excel_files(entry_es_url, token, excel_file, save_path, my_app.logger)
     except Exception as e:
         my_app.logger.error(e)
         messagebox.showerror("Error", str(e))
@@ -551,23 +565,23 @@ class MyApp(tk.Tk):
         self.logger.setLevel(logging.DEBUG)
         self.tasks = list()
 
-        def _async_call(func, *args, **kwargs):
-            # self.register_button.config(text="Running", state=tk.DISABLED)
+        def async_call(func, *args, **kwargs):
+            self.button_start.config(text="Running", state=tk.DISABLED)
             t = threading.Thread(target=func, args=args, kwargs=kwargs)
             self.tasks.append(t)
             t.daemon = True
             t.start()
 
-        def check_register_status():
+        def check_task_status():
             i = 0
             while i < len(self.tasks):
                 if not self.tasks[i].is_alive():
                     self.tasks.pop(i)
-                    self.register_button.config(text="Register", state=tk.NORMAL)
+                    self.button_start.config(text="Start Test", state=tk.NORMAL)
                 i += 1
 
         def loop_update():
-            check_register_status()
+            check_task_status()
             # 1 秒后再次调用自己
             self.after(1000, loop_update)
 
@@ -650,8 +664,8 @@ class MyApp(tk.Tk):
         i += 1
 
         # 开始处理按钮
-        button_start = tk.Button(left_frame, text="Start Test", command=lambda: async_call(start_processing, self))
-        button_start.grid(row=i, column=0, columnspan=3, pady=20)
+        self.button_start = tk.Button(left_frame, text="Start Test", command=lambda: async_call(start_processing, self))
+        self.button_start.grid(row=i, column=0, columnspan=3, pady=20)
 
         # 创建一个 ScrolledText 小部件用于显示日志
         i = 0
