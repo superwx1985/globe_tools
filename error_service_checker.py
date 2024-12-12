@@ -133,6 +133,9 @@ def check_data(name, _result, expected, actual):
         expected_hashed = [frozenset(d.items()) if isinstance(d, dict) else d for d in expected]
         actual_hashed = [frozenset(d.items()) if isinstance(d, dict) else d for d in actual]
         list_matched = Counter(expected_hashed) == Counter(actual_hashed)
+    elif isinstance(expected, float) and isinstance(actual, str):
+        expected = '' if math.isnan(expected) else expected
+        matched = expected == actual
     else:
         matched = expected == actual
     if not list_matched or not matched:
@@ -644,7 +647,7 @@ class MyApp(tk.Tk):
         i += 1
 
         self.entry_client_secret = create_label_entry(left_frame, name="Client Secret",
-                                                      default="BD2F91CB-6DCD-4BB1-82EE-5951C4753EBE", width=50, row=i)
+                                                      default="7E11D61D-F3A4-11EC-A1DF-8C47BE2B163E", width=50, row=i)
         i += 1
 
         # A 表选择框
