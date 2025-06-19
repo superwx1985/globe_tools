@@ -1,0 +1,65 @@
+{
+	"area": {
+		"points": [
+			{
+				"x": 7.743608474731445,
+				"y": -10.914376258850098
+			},
+			{
+				"x": 6.2888875007629398,
+				"y": -12.33915901184082
+			},
+			{
+				"x": 4.212052822113037,
+				"y": -11.79183578491211
+			},
+			{
+				"x": 2.956878900527954,
+				"y": -10.5682373046875
+			},
+			{
+				"x": 3.1010191440582277,
+				"y": -8.571016311645508
+			},
+			{
+				"x": 4.9364013671875,
+				"y": -8.47674560546875
+			}
+		]
+	},
+	"header": {
+		"arp": {
+			"x": -232840418,
+			"y": 538828236,
+			"z": 248676389
+		},
+		"confirmed": true,
+		"name": "gorsonbigMZ002",
+		"original_source": {
+			"mower_serial_number": 250660605,
+			"type": "mower"
+		},
+		"ra_serial_number": 250351271,
+		"type": {
+			"type": 3
+		},
+		"verified": false
+	},
+	"transport_path": {
+		"points": null,
+		"width": 1.0
+	},
+	"waypoint": {
+		"device_type": {
+			"group": 0,
+			"sub_group": 0,
+			"variant": 0
+		},
+		"entry_direction": 0.0,
+		"location": {
+			"x": 0.0,
+			"y": 0.0
+		},
+		"serial_number": 0
+	}
+}

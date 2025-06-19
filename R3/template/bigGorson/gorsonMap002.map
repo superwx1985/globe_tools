@@ -1,0 +1,164 @@
+{
+	"attributes": [
+		{
+			"cutting_height": 0,
+			"edge_cutting": false,
+			"front_light_mode": 255,
+			"obstacle_handling": 255,
+			"pattern_offset": 255,
+			"pattern_rotation": 65535,
+			"rear_light_mode": 255,
+			"speaker_sound": 255,
+			"speed": 255
+		},
+		{
+			"cutting_height": 0,
+			"edge_cutting": false,
+			"front_light_mode": 255,
+			"obstacle_handling": 255,
+			"pattern_offset": 255,
+			"pattern_rotation": 65535,
+			"rear_light_mode": 255,
+			"speaker_sound": 255,
+			"speed": 255
+		},
+		{
+			"cutting_height": 0,
+			"edge_cutting": false,
+			"front_light_mode": 255,
+			"obstacle_handling": 255,
+			"pattern_offset": 255,
+			"pattern_rotation": 65535,
+			"rear_light_mode": 255,
+			"speaker_sound": 255,
+			"speed": 255
+		},
+		{
+			"cutting_height": 0,
+			"edge_cutting": false,
+			"front_light_mode": 255,
+			"obstacle_handling": 255,
+			"pattern_offset": 255,
+			"pattern_rotation": 65535,
+			"rear_light_mode": 255,
+			"speaker_sound": 255,
+			"speed": 255
+		},
+		{
+			"cutting_height": 0,
+			"edge_cutting": false,
+			"front_light_mode": 255,
+			"obstacle_handling": 255,
+			"pattern_offset": 255,
+			"pattern_rotation": 65535,
+			"rear_light_mode": 255,
+			"speaker_sound": 255,
+			"speed": 255
+		},
+		{
+			"cutting_height": 0,
+			"edge_cutting": false,
+			"front_light_mode": 255,
+			"obstacle_handling": 255,
+			"pattern_offset": 255,
+			"pattern_rotation": 65535,
+			"rear_light_mode": 255,
+			"speaker_sound": 255,
+			"speed": 255
+		},
+		{
+			"cutting_height": 0,
+			"edge_cutting": false,
+			"front_light_mode": 255,
+			"obstacle_handling": 255,
+			"pattern_offset": 255,
+			"pattern_rotation": 65535,
+			"rear_light_mode": 255,
+			"speaker_sound": 255,
+			"speed": 255
+		}
+	],
+	"common_attributes": {
+		"interval_time": 65535
+	},
+	"confirmed": true,
+	"last_modification": 1750233539,
+	"name": "gorsonMap002",
+	"objects": [
+		{
+			"cut": true,
+			"enabled": true,
+			"name": "gorsonbigMZ001"
+		},
+		{
+			"cut": true,
+			"enabled": true,
+			"name": "gorsonbigTP001"
+		},
+		{
+			"cut": true,
+			"enabled": true,
+			"name": "gorsonbigCS001"
+		},
+		{
+			"cut": true,
+			"enabled": true,
+			"name": "gorsonbigNG001"
+		},
+		{
+			"cut": true,
+			"enabled": true,
+			"name": "gorsonbigNG002"
+		},
+		{
+			"cut": true,
+			"enabled": true,
+			"name": "gorsonbigMZ002"
+		},
+		{
+			"cut": true,
+			"enabled": true,
+			"name": "gorsonbigNG003"
+		},
+		{
+			"cut": true,
+			"enabled": true,
+			"name": "gorsonbigNG004"
+		},
+		{
+			"cut": true,
+			"enabled": true,
+			"name": "gorsonbigPS001"
+		},
+		{
+			"cut": true,
+			"enabled": true,
+			"name": "gorsonbigPS002"
+		},
+		{
+			"cut": true,
+			"enabled": true,
+			"name": "gorsonbigTP002"
+		},
+		{
+			"cut": true,
+			"enabled": true,
+			"name": "gorsonbigMZ003"
+		},
+		{
+			"cut": true,
+			"enabled": true,
+			"name": "gorsonbigMZ011"
+		}
+	],
+	"original_source": {
+		"mower_serial_number": 250660605,
+		"type": "mower"
+	},
+	"ra_serial_number": 250351271,
+	"station_arp": {
+		"x": -232840418,
+		"y": 538828236,
+		"z": 248676389
+	}
+}

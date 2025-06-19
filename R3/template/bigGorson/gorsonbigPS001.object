@@ -1,0 +1,40 @@
+{
+	"area": {
+		"points": null
+	},
+	"header": {
+		"arp": {
+			"x": -232840418,
+			"y": 538828236,
+			"z": 248676389
+		},
+		"confirmed": true,
+		"name": "gorsonbigPS001",
+		"original_source": {
+			"mower_serial_number": 250660605,
+			"type": "mower"
+		},
+		"ra_serial_number": 250351271,
+		"type": {
+			"type": 6
+		},
+		"verified": false
+	},
+	"transport_path": {
+		"points": null,
+		"width": 1.0
+	},
+	"waypoint": {
+		"device_type": {
+			"group": 0,
+			"sub_group": 0,
+			"variant": 0
+		},
+		"entry_direction": 24.22076416015625,
+		"location": {
+			"x": 6.623741149902344,
+			"y": 4.337522029876709
+		},
+		"serial_number": 0
+	}
+}

@@ -16,3 +16,4 @@ build/
 debug.py
 *.spec
 /v1.json
+/R3/template/newGorson/

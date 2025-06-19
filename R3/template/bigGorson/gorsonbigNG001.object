@@ -1,0 +1,57 @@
+{
+	"area": {
+		"points": [
+			{
+				"x": 5.115191459655762,
+				"y": -1.941156029701233
+			},
+			{
+				"x": 6.21494722366333,
+				"y": -5.530102252960205
+			},
+			{
+				"x": 2.4579226970672609,
+				"y": -6.541518211364746
+			},
+			{
+				"x": 0.45876091718673708,
+				"y": -2.9880712032318117
+			}
+		]
+	},
+	"header": {
+		"arp": {
+			"x": -232840418,
+			"y": 538828236,
+			"z": 248676389
+		},
+		"confirmed": true,
+		"name": "gorsonbigNG001",
+		"original_source": {
+			"mower_serial_number": 250660605,
+			"type": "mower"
+		},
+		"ra_serial_number": 250351271,
+		"type": {
+			"type": 3
+		},
+		"verified": false
+	},
+	"transport_path": {
+		"points": null,
+		"width": 1.0
+	},
+	"waypoint": {
+		"device_type": {
+			"group": 0,
+			"sub_group": 0,
+			"variant": 0
+		},
+		"entry_direction": 0.0,
+		"location": {
+			"x": 0.0,
+			"y": 0.0
+		},
+		"serial_number": 0
+	}
+}
