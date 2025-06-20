@@ -77,8 +77,8 @@ def replace_points_in_template(input_folder, output_folder, old_name, new_name, 
     data = modify_json(data, "$.area.points", new_points)
     data = modify_json(data, "$.header.name", new_name)
 
-    with open(os.path.join(output_folder, f"{new_name}.object"), 'w') as file:
-        json.dump(data, file, indent=2)
+    with open(os.path.join(output_folder, f"{new_name}.object"), 'w', newline='\n') as file:
+        json.dump(data, file, indent=None, separators=(",", ":"))
 
     return data
 
@@ -116,8 +116,8 @@ def offset_points_in_template(input_folder, output_folder, old_name, new_name, o
 
     data = modify_json(data, "$.header.name", new_name)
 
-    with open(os.path.join(output_folder, f"{new_name}.object"), 'w') as file:
-        json.dump(data, file, indent=2)
+    with open(os.path.join(output_folder, f"{new_name}.object"), 'w', newline='\n') as file:
+        json.dump(data, file, indent=None, separators=(",", ":"))
 
     return data
 
@@ -147,19 +147,19 @@ def copy_zones(input_folder, output_folder, map_name, offset_x, offset_y):
     map_data = modify_json(map_data, "$.objects", zones)
     map_data = modify_json(map_data, "$.last_modification", int(time.time()))
 
-    with open(os.path.join(output_folder, f"{map_name}.map"), 'w') as file:
-            json.dump(map_data, file, indent=2)
+    with open(os.path.join(output_folder, f"{map_name}.map"), 'w', newline='\n') as file:
+            json.dump(map_data, file, indent=None, separators=(",", ":"))
 
     with open(os.path.join(input_folder, "definition.json"), 'r') as file:
         site_data = json.load(file)
     site_data = modify_json(site_data, "$.time_stamp", int(time.time()))
-    with open(os.path.join(output_folder, "definition.json"), 'w') as file:
-        json.dump(site_data, file, indent=2)
+    with open(os.path.join(output_folder, "definition.json"), 'w', newline='\n') as file:
+        json.dump(site_data, file, indent=None, separators=(",", ":"))
 
 
 if __name__ == '__main__':
-    input_folder = "template/bigGorson"
-    output_folder = "template/newGorson"
+    input_folder = "map/template"
+    output_folder = "map/new"
     old_name = "gorsonbigMZ001"
     new_name = "gorsonbigMZ011"
 
@@ -178,4 +178,4 @@ if __name__ == '__main__':
     #
     # pprint(result, indent=2, width=50)
 
-    copy_zones(input_folder, output_folder, "gorsonMap001", 200, 100)
+    copy_zones(input_folder, output_folder, "map001", 200, 400)

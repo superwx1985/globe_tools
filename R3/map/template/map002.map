@@ -83,72 +83,72 @@
 	},
 	"confirmed": true,
 	"last_modification": 1750233539,
-	"name": "gorsonMap002",
+	"name": "map002",
 	"objects": [
 		{
 			"cut": true,
 			"enabled": true,
-			"name": "gorsonbigMZ001"
+			"name": "MZ001"
 		},
 		{
 			"cut": true,
 			"enabled": true,
-			"name": "gorsonbigTP001"
+			"name": "TP001"
 		},
 		{
 			"cut": true,
 			"enabled": true,
-			"name": "gorsonbigCS001"
+			"name": "CS001"
 		},
 		{
 			"cut": true,
 			"enabled": true,
-			"name": "gorsonbigNG001"
+			"name": "NG001"
 		},
 		{
 			"cut": true,
 			"enabled": true,
-			"name": "gorsonbigNG002"
+			"name": "NG002"
 		},
 		{
 			"cut": true,
 			"enabled": true,
-			"name": "gorsonbigMZ002"
+			"name": "MZ002"
 		},
 		{
 			"cut": true,
 			"enabled": true,
-			"name": "gorsonbigNG003"
+			"name": "NG003"
 		},
 		{
 			"cut": true,
 			"enabled": true,
-			"name": "gorsonbigNG004"
+			"name": "NG004"
 		},
 		{
 			"cut": true,
 			"enabled": true,
-			"name": "gorsonbigPS001"
+			"name": "PS001"
 		},
 		{
 			"cut": true,
 			"enabled": true,
-			"name": "gorsonbigPS002"
+			"name": "PS002"
 		},
 		{
 			"cut": true,
 			"enabled": true,
-			"name": "gorsonbigTP002"
+			"name": "TP002"
 		},
 		{
 			"cut": true,
 			"enabled": true,
-			"name": "gorsonbigMZ003"
+			"name": "MZ003"
 		},
 		{
 			"cut": true,
 			"enabled": true,
-			"name": "gorsonbigMZ011"
+			"name": "MZ011"
 		}
 	],
 	"original_source": {

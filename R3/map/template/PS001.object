@@ -9,7 +9,7 @@
 			"z": 248676389
 		},
 		"confirmed": true,
-		"name": "gorsonbigPS002",
+		"name": "PS001",
 		"original_source": {
 			"mower_serial_number": 250660605,
 			"type": "mower"
@@ -30,10 +30,10 @@
 			"sub_group": 0,
 			"variant": 0
 		},
-		"entry_direction": 280.286376953125,
+		"entry_direction": 24.22076416015625,
 		"location": {
-			"x": -34.12538528442383,
-			"y": -3.512434244155884
+			"x": 6.623741149902344,
+			"y": 4.337522029876709
 		},
 		"serial_number": 0
 	}

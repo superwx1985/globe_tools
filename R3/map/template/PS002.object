@@ -9,37 +9,20 @@
 			"z": 248676389
 		},
 		"confirmed": true,
-		"name": "gorsonbigTP002",
+		"name": "PS002",
 		"original_source": {
 			"mower_serial_number": 250660605,
 			"type": "mower"
 		},
 		"ra_serial_number": 250351271,
 		"type": {
-			"type": 4
+			"type": 6
 		},
 		"verified": false
 	},
 	"transport_path": {
-		"points": [
-			{
-				"x": -2.4564385414123537,
-				"y": -8.28880500793457
-			},
-			{
-				"x": -1.1203197240829468,
-				"y": -11.57578182220459
-			},
-			{
-				"x": -1.4284625053405762,
-				"y": -13.933497428894043
-			},
-			{
-				"x": -2.014299154281616,
-				"y": -15.122036933898926
-			}
-		],
-		"width": 2.0
+		"points": null,
+		"width": 1.0
 	},
 	"waypoint": {
 		"device_type": {
@@ -47,10 +30,10 @@
 			"sub_group": 0,
 			"variant": 0
 		},
-		"entry_direction": 0.0,
+		"entry_direction": 280.286376953125,
 		"location": {
-			"x": 0.0,
-			"y": 0.0
+			"x": -34.12538528442383,
+			"y": -3.512434244155884
 		},
 		"serial_number": 0
 	}
